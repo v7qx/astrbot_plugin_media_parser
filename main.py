@@ -30,7 +30,7 @@ from .core.output_policy import apply_override, parse_output_override
     "mod_astrbot_plugin_media_parser",
     "drdon1234",
     "聚合解析流媒体平台链接，转换为媒体直链发送",
-    "6.1.5-personal"
+    "6.1.6-personal"
 )
 class VideoParserPlugin(Star):
 
@@ -649,6 +649,7 @@ class VideoParserPlugin(Star):
             try:
                 self.message_sender.FORWARD_CHUNK_SIZE = cfg.message.forward_chunk_size
                 self.message_sender.DIRECT_IMAGE_BATCH_SIZE = cfg.message.direct_image_batch_size
+                self.message_sender.VIDEO_PACK_THRESHOLD = cfg.message.video_pack_threshold
 
                 if cfg.message.auto_pack:
                     await self.message_sender.send_packed_results(

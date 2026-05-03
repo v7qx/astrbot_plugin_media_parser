@@ -92,6 +92,20 @@ class MessageSender:
             forward_nodes = []
             forward_items = []
             direct_nodes = []
+            
+            total_videos = 0
+            for meta in normal_metadata:
+                for node in meta.get('link_nodes', []):
+                    if isinstance(node, Video):
+                        total_videos += 1
+                        
+            pack_videos = True
+            if hasattr(self, 'VIDEO_PACK_THRESHOLD') and self.VIDEO_PACK_THRESHOLD is not None:
+                if self.VIDEO_PACK_THRESHOLD == 0:
+                    pack_videos = False
+                elif total_videos <= self.VIDEO_PACK_THRESHOLD:
+                    pack_videos = False
+
             for link_idx, meta in enumerate(normal_metadata):
                 link_nodes = meta.get('link_nodes', [])
                 metadata = meta.get('metadata', {}) or {}
@@ -134,7 +148,7 @@ class MessageSender:
                             video_index,
                         )
                         video_index += 1
-                        if not video_file:
+                        if not pack_videos or not video_file:
                             direct_nodes.append(node)
                             continue
                         forward_video = self._build_forward_video(video_file)
