@@ -2,5 +2,5 @@ name: mod_astrbot_plugin_media_parser
 desc: 聚合解析流媒体平台链接，转换为媒体直链发送
 version: v6.1.4-personal
 author: drdon1234
-repo: https://github.com/v7qx/mod_astrbot_plugin_media_parser
+repo: https://github.com/v7qx/mod_astrbot_plugin_media_parser/tree/personal
 
