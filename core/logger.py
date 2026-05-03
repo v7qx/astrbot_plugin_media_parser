@@ -3,4 +3,4 @@ try:
     from astrbot.api import logger
 except ImportError:
     import logging
-    logger = logging.getLogger("astrbot_plugin_media_parser")
+    logger = logging.getLogger("mod_astrbot_plugin_media_parser")

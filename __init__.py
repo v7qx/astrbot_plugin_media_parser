@@ -1,1 +1,1 @@
-"""astrbot_plugin_media_parser 插件包入口。"""
+"""mod_astrbot_plugin_media_parser 插件包入口。"""
