@@ -323,6 +323,15 @@ class MessageSender:
 
     @staticmethod
     def _get_forward_video_file(metadata: dict, video_index: int) -> str:
+        is_use_local = metadata.get('use_local', False)
+        
+        if is_use_local:
+            file_paths = metadata.get('file_paths') or []
+            if video_index < len(file_paths) and file_paths[video_index]:
+                file_path = str(file_paths[video_index]).strip()
+                if file_path:
+                    return f"file://{file_path}" if file_path.startswith("/") else file_path
+
         token_urls = metadata.get('file_token_urls') or []
         if video_index < len(token_urls) and token_urls[video_index]:
             return str(token_urls[video_index]).strip()
@@ -331,11 +340,15 @@ class MessageSender:
         if video_index < len(video_urls):
             url_list = video_urls[video_index]
             if isinstance(url_list, list) and url_list:
-                return str(url_list[0] or "").strip()
+                url = str(url_list[0] or "").strip()
+                if not url.startswith("range:"):
+                    return url
         
         file_paths = metadata.get('file_paths') or []
         if video_index < len(file_paths) and file_paths[video_index]:
-            return str(file_paths[video_index]).strip()
+            file_path = str(file_paths[video_index]).strip()
+            if file_path:
+                return f"file://{file_path}" if file_path.startswith("/") else file_path
         
         return ""
 
