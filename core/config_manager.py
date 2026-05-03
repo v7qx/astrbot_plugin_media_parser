@@ -215,6 +215,16 @@ class PermissionConfig:
 
 
 @dataclass
+class DedupConfig:
+    enable: bool = False
+    group: List[str] = field(default_factory=list)
+    competitor_bot_ids: List[str] = field(default_factory=list)
+    wait_seconds: float = 2.0
+    url_cooldown_seconds: float = 120.0
+    ignore_competitor_messages: bool = True
+
+
+@dataclass
 class DownloadConfig:
     max_video_size_mb: float = 1000.0
     large_video_threshold_mb: float = Config.DEFAULT_LARGE_VIDEO_THRESHOLD_MB
@@ -401,6 +411,26 @@ class ConfigManager:
                 blacklist.get("group", [])
             ),
         )
+
+        # --- dedup ---
+        dedup_raw = config.get("dedup", {})
+        dedup_enable = bool(dedup_raw.get("enable", False))
+        dedup_group = self._normalize_id_list(dedup_raw.get("group", []))
+        dedup_competitor_bot_ids = self._normalize_id_list(dedup_raw.get("competitor_bot_ids", []))
+        dedup_wait_seconds = self._parse_non_negative_float(dedup_raw.get("wait_seconds", 2.0), 2.0)
+        dedup_url_cooldown_seconds = self._parse_non_negative_float(dedup_raw.get("url_cooldown_seconds", 120.0), 120.0)
+        dedup_ignore_competitor_messages = bool(dedup_raw.get("ignore_competitor_messages", True))
+        
+        self.dedup = DedupConfig(
+            enable=dedup_enable,
+            group=dedup_group,
+            competitor_bot_ids=dedup_competitor_bot_ids,
+            wait_seconds=dedup_wait_seconds,
+            url_cooldown_seconds=dedup_url_cooldown_seconds,
+            ignore_competitor_messages=dedup_ignore_competitor_messages
+        )
+        if self.dedup.enable and not self.dedup.competitor_bot_ids:
+            logger.debug("启用多机器人互斥 (dedup.enable=True) 但未配置互斥机器人ID，功能仅作URL冷却处理。")
 
         # --- download ---
         download_raw = config.get("download", {})

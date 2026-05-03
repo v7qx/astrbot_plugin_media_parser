@@ -337,6 +337,47 @@
             }
         }
     },
+    "dedup": {
+        "description": "多机器人互斥",
+        "type": "object",
+        "items": {
+            "enable": {
+                "description": "启用多机器人互斥",
+                "type": "bool",
+                "default": false
+            },
+            "group": {
+                "description": "启用互斥的群聊",
+                "type": "list",
+                "hint": "留空 = 所有群聊启用互斥；填写群号 = 仅这些群启用互斥",
+                "default": []
+            },
+            "competitor_bot_ids": {
+                "description": "互斥机器人ID",
+                "type": "list",
+                "hint": "填写需要避让的机器人账号ID；留空 = 不检测任何互斥机器人",
+                "default": []
+            },
+            "wait_seconds": {
+                "description": "互斥等待时间",
+                "type": "float",
+                "hint": "检测到可解析链接后先等待指定秒数；等待期间若互斥机器人已响应，则取消本次解析",
+                "default": 2.0
+            },
+            "url_cooldown_seconds": {
+                "description": "同链接冷却时间",
+                "type": "float",
+                "hint": "同一群同一链接在冷却期内只解析一次，防止本机器人重复解析；0 = 不启用",
+                "default": 120.0
+            },
+            "ignore_competitor_messages": {
+                "description": "忽略互斥机器人消息",
+                "type": "bool",
+                "hint": "如果消息发送者是互斥机器人ID，则直接忽略，防止两个机器人互相解析对方消息",
+                "default": true
+            }
+        }
+    },
     "bilibili_enhanced": {
         "description": "B站增强",
         "type": "object",

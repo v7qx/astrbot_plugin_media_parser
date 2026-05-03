@@ -21,6 +21,7 @@ from .core.constants import Config
 from .core.message_adapter.sender import MessageSender
 from .core.message_adapter.node_builder import build_all_nodes
 from .core.config_manager import ConfigManager
+from .core.dedup_guard import DedupGuard
 from .core.interaction.platform.bilibili import BilibiliAdminCookieAssistManager
 from .core.output_policy import apply_override, parse_output_override
 
@@ -29,7 +30,7 @@ from .core.output_policy import apply_override, parse_output_override
     "astrbot_plugin_media_parser",
     "drdon1234",
     "聚合解析流媒体平台链接，转换为媒体直链发送",
-    "6.1.1"
+    "6.1.2-personal"
 )
 class VideoParserPlugin(Star):
 
@@ -39,6 +40,8 @@ class VideoParserPlugin(Star):
 
         self.config_manager = ConfigManager(config)
         cfg = self.config_manager
+
+        self.dedup_guard = DedupGuard(cfg.dedup)
 
         parsers = cfg.create_parsers()
         self.parser_manager = ParserManager(parsers)
@@ -322,6 +325,13 @@ class VideoParserPlugin(Star):
         sender_id = event.get_sender_id()
         group_id = None if is_private else event.get_group_id()
 
+        if cfg.dedup.enable and group_id and self.dedup_guard.is_competitor_message(sender_id):
+            self.dedup_guard.record_competitor_message(group_id)
+            if cfg.dedup.ignore_competitor_messages:
+                if cfg.admin.debug_mode:
+                    self.logger.debug(f"忽略互斥机器人消息: group_id={group_id}, sender_id={sender_id}")
+                return
+
         if not cfg.permission.check(is_private, sender_id, group_id):
             return
 
@@ -396,6 +406,39 @@ class VideoParserPlugin(Star):
 
         if not cfg.trigger.should_parse(original_message_text):
             return
+
+        if links_with_parser:
+            non_cooldown_links = []
+            for link, parser in links_with_parser:
+                if self.dedup_guard.is_url_cooldown(group_id, link):
+                    if cfg.admin.debug_mode:
+                        remain = self.dedup_guard.get_url_cooldown_remain(group_id, link)
+                        self.logger.debug(f"URL冷却命中: group_id={group_id}, url={link}, 剩余冷却时间={remain:.1f}s")
+                else:
+                    non_cooldown_links.append((link, parser))
+            
+            if not non_cooldown_links:
+                return
+            links_with_parser = non_cooldown_links
+
+            if group_id and self.dedup_guard.is_group_enabled(group_id) and cfg.dedup.competitor_bot_ids and cfg.dedup.wait_seconds > 0:
+                if cfg.admin.debug_mode:
+                    self.logger.debug(f"开始等待: group_id={group_id}, wait_seconds={cfg.dedup.wait_seconds}, url数量={len(links_with_parser)}")
+                
+                competitor_responded = await self.dedup_guard.wait_and_check(group_id)
+                if competitor_responded:
+                    if cfg.admin.debug_mode:
+                        self.logger.debug(f"等待后取消: group_id={group_id}, 触发原因: 等待期间检测到互斥机器人发言")
+                    return
+                else:
+                    if cfg.admin.debug_mode:
+                        self.logger.debug(f"等待后继续: group_id={group_id}, 未检测到互斥机器人响应")
+            elif group_id and not self.dedup_guard.is_group_enabled(group_id):
+                if cfg.admin.debug_mode and cfg.dedup.enable and cfg.dedup.competitor_bot_ids:
+                    self.logger.debug(f"群不在dedup.group中: group_id={group_id}, 不执行互斥等待")
+
+            for link, _ in links_with_parser:
+                self.dedup_guard.record_url_cooldown(group_id, link)
 
         if cfg.admin.debug_mode:
             self.logger.debug(
