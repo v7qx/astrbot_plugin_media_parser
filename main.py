@@ -22,6 +22,7 @@ from .core.message_adapter.sender import MessageSender
 from .core.message_adapter.node_builder import build_all_nodes
 from .core.config_manager import ConfigManager
 from .core.interaction.platform.bilibili import BilibiliAdminCookieAssistManager
+from .core.output_policy import apply_override, parse_output_override
 
 
 @register(
@@ -176,16 +177,29 @@ class VideoParserPlugin(Star):
         """判断解析结果是否包含可发送的文本元数据。"""
         return any(
             bool(str(metadata.get(key) or "").strip())
-            for key in ("title", "author", "desc", "timestamp")
+            for key in (
+                "title",
+                "author",
+                "desc",
+                "description",
+                "timestamp",
+                "publish_time",
+            )
         )
 
-    def _filter_links_by_output(self, links_with_parser):
+    def _filter_links_by_output(self, links_with_parser, output_override=None):
         """过滤掉当前配置下不会产生任何输出的控制器链接。"""
         cfg = self.config_manager
         filtered = []
         for link, parser in links_with_parser:
             parser_name = getattr(parser, "name", "")
-            if cfg.message.controller_has_any_output(parser_name):
+            if (
+                output_override
+                and output_override.mode
+                and any(apply_override((False, False), output_override))
+            ):
+                filtered.append((link, parser))
+            elif cfg.message.controller_has_any_output(parser_name):
                 filtered.append((link, parser))
             elif cfg.admin.debug_mode:
                 self.logger.debug(
@@ -194,11 +208,15 @@ class VideoParserPlugin(Star):
                 )
         return filtered
 
-    def _apply_output_flags(self, metadata_list) -> None:
+    def _apply_output_flags(self, metadata_list, output_override=None) -> None:
         """将每条解析结果的有效输出开关写入 metadata。"""
         for metadata in metadata_list:
             text_enabled, rich_enabled = (
                 self.config_manager.message.output_for_metadata(metadata)
+            )
+            text_enabled, rich_enabled = apply_override(
+                (text_enabled, rich_enabled),
+                output_override,
             )
             metadata["_enable_text_metadata"] = text_enabled
             metadata["_enable_rich_media"] = rich_enabled
@@ -256,6 +274,38 @@ class VideoParserPlugin(Star):
             logger.warning(f"管理员清理缓存失败: {e}")
             await event.send(event.plain_result(f"清理失败: {e}"))
 
+    def _stop_event_if_supported(self, event: AstrMessageEvent) -> None:
+        """解析插件已处理消息时，尽量阻止后续 LLM pipeline 继续响应。"""
+        for method_name in (
+            "stop_event",
+            "stop_propagation",
+            "stop",
+            "prevent_default",
+        ):
+            method = getattr(event, method_name, None)
+            if not callable(method):
+                continue
+            try:
+                method()
+                if self.config_manager.admin.debug_mode:
+                    self.logger.debug(f"已调用事件停止方法: {method_name}")
+                return
+            except TypeError:
+                continue
+            except Exception as e:
+                if self.config_manager.admin.debug_mode:
+                    self.logger.debug(
+                        f"调用事件停止方法失败: {method_name}, 错误: {e}"
+                    )
+        for attr_name in ("is_stopped", "stopped"):
+            try:
+                setattr(event, attr_name, True)
+                if self.config_manager.admin.debug_mode:
+                    self.logger.debug(f"已设置事件停止标记: {attr_name}")
+                return
+            except Exception:
+                continue
+
     # ── 主事件处理 ──────────────────────────────────────
 
     @filter.event_message_type(EventMessageType.ALL)
@@ -276,7 +326,21 @@ class VideoParserPlugin(Star):
             return
 
         original_message_text = event.message_str or ""
-        parse_text = original_message_text
+        output_override = parse_output_override(original_message_text)
+        parse_text = (
+            output_override.cleaned_text
+            if output_override.mode
+            else original_message_text
+        )
+        if cfg.admin.debug_mode:
+            if output_override.mode:
+                self.logger.debug(
+                    "output override detected: "
+                    f"mode={output_override.mode}, "
+                    f"cleaned_text_len={len(parse_text)}"
+                )
+            else:
+                self.logger.debug("output override not detected")
 
         clean_kw = cfg.admin.clean_cache_keyword
         if clean_kw and original_message_text.strip() == clean_kw:
@@ -301,7 +365,10 @@ class VideoParserPlugin(Star):
         )
         found_direct_links = bool(links_with_parser)
         if found_direct_links:
-            links_with_parser = self._filter_links_by_output(links_with_parser)
+            links_with_parser = self._filter_links_by_output(
+                links_with_parser,
+                output_override,
+            )
             if not links_with_parser:
                 return
 
@@ -312,7 +379,8 @@ class VideoParserPlugin(Star):
             ):
                 links_with_parser = self._try_extract_reply_links(event)
                 links_with_parser = self._filter_links_by_output(
-                    links_with_parser
+                    links_with_parser,
+                    output_override,
                 )
                 if links_with_parser and cfg.admin.debug_mode:
                     self.logger.debug(
@@ -332,7 +400,8 @@ class VideoParserPlugin(Star):
         if cfg.admin.debug_mode:
             self.logger.debug(
                 f"提取到 {len(links_with_parser)} 个可解析链接: "
-                f"{[link for link, _ in links_with_parser]}"
+                f"{[link for link, _ in links_with_parser]}, "
+                f"output_override={output_override.mode}"
             )
 
         sender_name, sender_id = self.message_sender.get_sender_info(event)
@@ -349,7 +418,7 @@ class VideoParserPlugin(Star):
                 if cfg.admin.debug_mode:
                     self.logger.debug("解析后未获得任何元数据")
                 return
-            self._apply_output_flags(metadata_list)
+            self._apply_output_flags(metadata_list, output_override)
 
             has_valid_metadata = any(
                 self._metadata_has_output_candidate(metadata)
@@ -502,6 +571,7 @@ class VideoParserPlugin(Star):
                 cfg.download.max_video_size_mb,
                 True,
                 True,
+                cfg.message.text_format,
             )
 
             if cfg.admin.debug_mode:
@@ -550,6 +620,7 @@ class VideoParserPlugin(Star):
 
                 if cfg.admin.debug_mode:
                     self.logger.debug("发送完成")
+                self._stop_event_if_supported(event)
             except Exception as e:
                 self.logger.exception(
                     f"发送消息失败: {e}, "

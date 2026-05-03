@@ -1,5 +1,5 @@
 """消息发送封装，统一不同会话场景下的发送行为。"""
-from typing import Any, List
+from typing import Any, List, Optional
 
 from astrbot.api.event import AstrMessageEvent
 from astrbot.api.message_components import Nodes, Plain, Image, Node
@@ -11,6 +11,9 @@ from ..logger import logger
 class MessageSender:
 
     """消息发送器，封装统一的私聊/群聊发送接口。"""
+
+    FORWARD_CHUNK_SIZE = 8
+    DIRECT_IMAGE_BATCH_SIZE = 4
 
     def get_sender_info(self, event: AstrMessageEvent) -> tuple:
         """获取发送者信息
@@ -54,54 +57,19 @@ class MessageSender:
         large_media_metadata = [
             meta for meta in link_metadata if meta.get('is_large_media', False)
         ]
-        normal_link_nodes = [
-            meta['link_nodes'] for meta in normal_metadata
-        ]
         large_media_link_nodes = [
             meta['link_nodes'] for meta in large_media_metadata
         ]
         separator = "-------------------------------------"
 
-        if normal_link_nodes:
-            flat_nodes = []
-            for link_idx, link_nodes in enumerate(normal_link_nodes):
-                if is_pure_image_gallery(link_nodes):
-                    texts = [
-                        node for node in link_nodes
-                        if isinstance(node, Plain)
-                    ]
-                    images = [
-                        node for node in link_nodes
-                        if isinstance(node, Image)
-                    ]
-                    for text in texts:
-                        flat_nodes.append(Node(
-                            name=sender_name,
-                            uin=sender_id,
-                            content=[text]
-                        ))
-                    if images:
-                        flat_nodes.append(Node(
-                            name=sender_name,
-                            uin=sender_id,
-                            content=images
-                        ))
-                else:
-                    for node in link_nodes:
-                        if node is not None:
-                            flat_nodes.append(Node(
-                                name=sender_name,
-                                uin=sender_id,
-                                content=[node]
-                            ))
-                if link_idx < len(normal_link_nodes) - 1:
-                    flat_nodes.append(Node(
-                        name=sender_name,
-                        uin=sender_id,
-                        content=[Plain(separator)]
-                    ))
-            if flat_nodes:
-                await event.send(event.chain_result([Nodes(flat_nodes)]))
+        if normal_metadata:
+            await self._send_forward_results(
+                event,
+                normal_metadata,
+                sender_name,
+                sender_id,
+                separator,
+            )
 
         if large_media_link_nodes:
             await self.send_large_media_results(
@@ -112,6 +80,76 @@ class MessageSender:
                 sender_id,
                 large_video_threshold_mb
             )
+
+    async def _send_forward_results(
+        self,
+        event: AstrMessageEvent,
+        normal_metadata: list,
+        sender_name: str,
+        sender_id: Any,
+        separator: str,
+    ) -> None:
+            forward_nodes = []
+            forward_items = []
+            direct_nodes = []
+            for link_idx, meta in enumerate(normal_metadata):
+                link_nodes = meta.get('link_nodes', [])
+                metadata = meta.get('metadata', {}) or {}
+                image_index = 0
+                for node in link_nodes:
+                    if node is None:
+                        continue
+                    if isinstance(node, Plain):
+                        # NapCat/QQ 对“一个转发子消息里包含多张图片”的兼容性较差；
+                        # 每个文本或图片单独作为一个 Node 更接近 OneBot 的 node_custom 用法。
+                        forward_nodes.append(Node(
+                            name=sender_name,
+                            uin=sender_id,
+                            content=[node],
+                        ))
+                        forward_items.append(("text", self._plain_text(node)))
+                    elif isinstance(node, Image):
+                        image_file = self._get_forward_image_file(
+                            metadata,
+                            image_index,
+                        )
+                        image_index += 1
+                        if not image_file:
+                            direct_nodes.append(node)
+                            continue
+                        forward_image = self._build_forward_image(image_file)
+                        if forward_image is None:
+                            direct_nodes.append(node)
+                            continue
+                        forward_nodes.append(Node(
+                            name=sender_name,
+                            uin=sender_id,
+                            content=[forward_image],
+                        ))
+                        forward_items.append(("image", image_file))
+                    else:
+                        direct_nodes.append(node)
+                if link_idx < len(normal_metadata) - 1:
+                    forward_nodes.append(Node(
+                        name=sender_name,
+                        uin=sender_id,
+                        content=[Plain(separator)],
+                    ))
+                    forward_items.append(("text", separator))
+            if forward_nodes:
+                sent = await self._send_onebot_forward_items(
+                    event,
+                    forward_items,
+                    sender_name,
+                    sender_id,
+                )
+                if not sent:
+                    await self._send_forward_nodes(event, forward_nodes)
+            for node in direct_nodes:
+                try:
+                    await event.send(event.chain_result([node]))
+                except Exception as e:
+                    logger.warning(f"发送非转发节点失败: {e}")
 
     async def send_large_media_results(
         self,
@@ -192,3 +230,157 @@ class MessageSender:
             if link_idx < len(all_link_nodes) - 1:
                 await event.send(event.plain_result(separator))
 
+    async def _send_private_direct_results(
+        self,
+        event: AstrMessageEvent,
+        normal_metadata: list,
+    ) -> None:
+        """NapCat 私聊合并转发图片上传易失败，私聊改为普通分组发送。"""
+        separator = "-------------------------------------"
+        for link_idx, meta in enumerate(normal_metadata):
+            link_nodes = meta.get('link_nodes', [])
+            batch = []
+            for node in link_nodes:
+                if node is None:
+                    continue
+                if isinstance(node, Plain):
+                    if batch:
+                        await event.send(event.chain_result(batch))
+                        batch = []
+                    await event.send(event.chain_result([node]))
+                elif isinstance(node, Image):
+                    batch.append(node)
+                    if len(batch) >= self.DIRECT_IMAGE_BATCH_SIZE:
+                        await event.send(event.chain_result(batch))
+                        batch = []
+                else:
+                    if batch:
+                        await event.send(event.chain_result(batch))
+                        batch = []
+                    await event.send(event.chain_result([node]))
+            if batch:
+                await event.send(event.chain_result(batch))
+            if link_idx < len(normal_metadata) - 1:
+                await event.send(event.plain_result(separator))
+
+    async def _send_forward_nodes(
+        self,
+        event: AstrMessageEvent,
+        nodes: List[Node],
+    ) -> None:
+        """按批发送合并转发节点，降低 QQ/NapCat 对大转发的解析压力。"""
+        chunk_size = max(1, self.FORWARD_CHUNK_SIZE)
+        for start in range(0, len(nodes), chunk_size):
+            chunk = nodes[start:start + chunk_size]
+            await event.send(event.chain_result([Nodes(chunk)]))
+
+    @staticmethod
+    def _get_forward_image_file(metadata: dict, image_index: int) -> str:
+        """合并转发中优先使用 URL 图片，避免本地 file 图片在 QQ 客户端不可查看。"""
+        video_count = len(metadata.get('video_urls') or [])
+        token_urls = metadata.get('file_token_urls') or []
+        token_index = video_count + image_index
+        if token_index < len(token_urls) and token_urls[token_index]:
+            return str(token_urls[token_index]).strip()
+
+        image_urls = metadata.get('image_urls') or []
+        if image_index >= len(image_urls):
+            return ""
+        url_list = image_urls[image_index]
+        if not isinstance(url_list, list) or not url_list:
+            return ""
+        return str(url_list[0] or "").strip()
+
+    @staticmethod
+    def _build_forward_image(image_file: str) -> Optional[Image]:
+        try:
+            return Image.fromURL(image_file)
+        except Exception as e:
+            logger.warning(f"构建转发URL图片失败: {e}")
+            return None
+
+    async def _send_onebot_forward_items(
+        self,
+        event: AstrMessageEvent,
+        items: list,
+        sender_name: str,
+        sender_id: Any,
+    ) -> bool:
+        """aiocqhttp/NapCat 下直接调用 OneBot 合并转发 API，贴近 nonebot 实现。"""
+        if not items or event.get_platform_name() != "aiocqhttp":
+            return False
+        bot = getattr(event, "bot", None)
+        if bot is None:
+            return False
+
+        message_chunks = self._build_onebot_forward_message_chunks(
+            items,
+            sender_name,
+            sender_id,
+        )
+        if not message_chunks:
+            return False
+
+        try:
+            for messages in message_chunks:
+                if event.is_private_chat():
+                    await bot.send_private_forward_msg(
+                        user_id=int(event.get_sender_id()),
+                        messages=messages,
+                    )
+                else:
+                    await bot.send_group_forward_msg(
+                        group_id=int(event.get_group_id()),
+                        messages=messages,
+                    )
+            return True
+        except Exception as e:
+            logger.warning(f"OneBot合并转发直调失败，回退AstrBot Nodes: {e}")
+            return False
+
+    def _build_onebot_forward_message_chunks(
+        self,
+        items: list,
+        sender_name: str,
+        sender_id: Any,
+    ) -> list:
+        chunks = []
+        for start in range(0, len(items), self.FORWARD_CHUNK_SIZE):
+            messages = []
+            for kind, value in items[start:start + self.FORWARD_CHUNK_SIZE]:
+                segment = self._build_onebot_segment(kind, value)
+                if not segment:
+                    continue
+                messages.append({
+                    "type": "node",
+                    "data": {
+                        "name": sender_name,
+                        "uin": str(sender_id),
+                        "content": [segment],
+                    },
+                })
+            if messages:
+                chunks.append(messages)
+        return chunks
+
+    @staticmethod
+    def _build_onebot_segment(kind: str, value: Any) -> Optional[dict]:
+        if kind == "text":
+            text = str(value or "").strip()
+            if not text:
+                return None
+            return {"type": "text", "data": {"text": text}}
+        if kind == "image":
+            file = str(value or "").strip()
+            if not file:
+                return None
+            return {"type": "image", "data": {"file": file}}
+        return None
+
+    @staticmethod
+    def _plain_text(node: Plain) -> str:
+        for attr in ("text", "message", "content"):
+            value = getattr(node, attr, None)
+            if value:
+                return str(value)
+        return str(node)

@@ -124,6 +124,9 @@ class MessageConfig:
     hot_comment_weibo: bool = True
     hot_comment_xiaohongshu: bool = True
     parser_outputs: Dict[str, str] = field(default_factory=dict)
+    text_format: "TextFormatConfig" = field(
+        default_factory=lambda: TextFormatConfig()
+    )
 
     def has_any_output(self) -> bool:
         """至少有一个解析器会发送文本元数据或富媒体。"""
@@ -162,6 +165,19 @@ class MessageConfig:
             if key in self.parser_outputs:
                 return self._flags_for_mode(self.parser_outputs[key])
         return OUTPUT_MODE_FLAGS[OUTPUT_MODE_ALL]
+
+
+@dataclass
+class TextFormatConfig:
+    show_title: bool = True
+    show_author: bool = True
+    show_desc: bool = True
+    show_timestamp: bool = False
+    show_video_size: bool = False
+    show_original_url: bool = False
+    max_desc_length: int = 0
+    hide_redundant_twitter_title: bool = True
+    hide_duplicate_title_author: bool = True
 
 
 @dataclass
@@ -295,6 +311,9 @@ class ConfigManager:
         hot_comments = message_raw.get("hot_comments", {})
         if not isinstance(hot_comments, dict):
             hot_comments = {}
+        text_format_raw = message_raw.get("text_format", {})
+        if not isinstance(text_format_raw, dict):
+            text_format_raw = {}
 
         hot_count = self._parse_non_negative_int(
             hot_comments.get("count", 0), 0
@@ -322,6 +341,36 @@ class ConfigManager:
                 hot_comments.get("xiaohongshu", True)
             ),
             parser_outputs=self.parser_outputs,
+            text_format=TextFormatConfig(
+                show_title=bool(text_format_raw.get("show_title", True)),
+                show_author=bool(text_format_raw.get("show_author", True)),
+                show_desc=bool(text_format_raw.get("show_desc", True)),
+                show_timestamp=bool(
+                    text_format_raw.get("show_timestamp", False)
+                ),
+                show_video_size=bool(
+                    text_format_raw.get("show_video_size", False)
+                ),
+                show_original_url=bool(
+                    text_format_raw.get("show_original_url", False)
+                ),
+                max_desc_length=self._parse_non_negative_int(
+                    text_format_raw.get("max_desc_length", 0),
+                    0,
+                ),
+                hide_redundant_twitter_title=bool(
+                    text_format_raw.get(
+                        "hide_redundant_twitter_title",
+                        True,
+                    )
+                ),
+                hide_duplicate_title_author=bool(
+                    text_format_raw.get(
+                        "hide_duplicate_title_author",
+                        True,
+                    )
+                ),
+            ),
         )
         if not self.message.has_any_output():
             logger.warning(

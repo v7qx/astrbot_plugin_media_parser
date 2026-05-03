@@ -8,6 +8,7 @@ from astrbot.api.message_components import Plain, Image, Video
 
 from ..downloader.utils import strip_media_prefixes
 from ..types import BuildAllNodesResult, LinkBuildMeta
+from .formatter import format_metadata_text
 
 
 def _resolve_output_flag(
@@ -79,7 +80,12 @@ def _mark_media_failure(
         metadata[count_key] = 1
 
 
-def build_text_node(metadata: Dict[str, Any], max_video_size_mb: float = 0.0, enable_text_metadata: bool = True) -> Optional[Plain]:
+def build_text_node(
+    metadata: Dict[str, Any],
+    max_video_size_mb: float = 0.0,
+    enable_text_metadata: bool = True,
+    text_format_config: Any = None,
+) -> Optional[Plain]:
     """构建文本节点
 
     Args:
@@ -95,28 +101,9 @@ def build_text_node(metadata: Dict[str, Any], max_video_size_mb: float = 0.0, en
         
     text_parts = []
     
-    if metadata.get('title'):
-        text_parts.append(f"标题：{metadata['title']}")
-    if metadata.get('author'):
-        text_parts.append(f"作者：{metadata['author']}")
-    if metadata.get('desc'):
-        text_parts.append(f"简介：{metadata['desc']}")
-    if metadata.get('timestamp'):
-        text_parts.append(f"发布时间：{metadata['timestamp']}")
-    
-    video_count = metadata.get('video_count', 0)
-    if video_count > 0:
-        actual_max_video_size_mb = metadata.get('max_video_size_mb')
-        total_video_size_mb = metadata.get('total_video_size_mb', 0.0)
-        
-        if actual_max_video_size_mb is not None:
-            if video_count == 1:
-                text_parts.append(f"视频大小：{actual_max_video_size_mb:.1f} MB")
-            else:
-                text_parts.append(
-                    f"视频大小：最大 {actual_max_video_size_mb:.1f} MB "
-                    f"(共 {video_count} 个视频, 总计 {total_video_size_mb:.1f} MB)"
-                )
+    metadata_text = format_metadata_text(metadata, text_format_config)
+    if metadata_text:
+        text_parts.append(metadata_text)
     
     has_valid_media = metadata.get('has_valid_media')
     video_urls = metadata.get('video_urls', [])
@@ -200,9 +187,6 @@ def build_text_node(metadata: Dict[str, Any], max_video_size_mb: float = 0.0, en
                 text_parts.append(f"解析失败：视频大小超过限制（{actual_video_size:.1f}MB）")
     
     _append_media_skip_summary(text_parts, metadata)
-    
-    if metadata.get('url'):
-        text_parts.append(f"原始链接：{metadata['url']}")
     
     if not text_parts:
         return None
@@ -368,7 +352,8 @@ def build_nodes_for_link(
     use_local_files: bool = False,
     max_video_size_mb: float = 0.0,
     enable_text_metadata: bool = True,
-    enable_rich_media: bool = True
+    enable_rich_media: bool = True,
+    text_format_config: Any = None,
 ) -> List[Union[Plain, Image, Video]]:
     """构建单个链接的节点列表
 
@@ -403,6 +388,7 @@ def build_nodes_for_link(
         metadata,
         max_video_size_mb,
         effective_text_metadata,
+        text_format_config,
     )
     if text_node:
         nodes.append(text_node)
@@ -437,7 +423,8 @@ def build_all_nodes(
     large_video_threshold_mb: float = 0.0,
     max_video_size_mb: float = 0.0,
     enable_text_metadata: bool = True,
-    enable_rich_media: bool = True
+    enable_rich_media: bool = True,
+    text_format_config: Any = None,
 ) -> BuildAllNodesResult:
     """构建所有链接的节点，处理消息打包逻辑
 
@@ -480,7 +467,8 @@ def build_all_nodes(
             use_local_files,
             max_video_size_mb,
             enable_text_metadata,
-            enable_rich_media
+            enable_rich_media,
+            text_format_config,
         )
         
         logger.debug(f"节点构建完成[{idx}]: {url}, 节点数量: {len(link_nodes)}")
@@ -513,6 +501,7 @@ def build_all_nodes(
             all_link_nodes.append(link_nodes)
             link_metadata.append(LinkBuildMeta(
                 link_nodes=link_nodes,
+                metadata=metadata,
                 is_large_media=is_large_media,
                 is_normal=not is_large_media,
                 video_files=link_video_files,
@@ -529,4 +518,3 @@ def build_all_nodes(
     )
     
     return BuildAllNodesResult(all_link_nodes, link_metadata, temp_files, video_files)
-

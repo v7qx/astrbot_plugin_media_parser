@@ -149,7 +149,7 @@
             "auto_pack": {
                 "description": "打包为消息集合",
                 "type": "bool",
-                "hint": "Napcat 存在兼容问题，不建议启用",
+                "hint": "图片较多时建议启用；图片会按独立转发节点分批发送",
                 "default": false
             },
             "opening": {
@@ -191,6 +191,59 @@
                     },
                     "xiaohongshu": {
                         "description": "小红书",
+                        "type": "bool",
+                        "default": true
+                    }
+                }
+            },
+            "text_format": {
+                "description": "文本输出格式",
+                "type": "object",
+                "hint": "控制解析文本中标题、作者、简介、时间、链接等字段的显示",
+                "items": {
+                    "show_title": {
+                        "description": "显示标题",
+                        "type": "bool",
+                        "default": true
+                    },
+                    "show_author": {
+                        "description": "显示作者",
+                        "type": "bool",
+                        "default": true
+                    },
+                    "show_desc": {
+                        "description": "显示简介",
+                        "type": "bool",
+                        "default": true
+                    },
+                    "show_timestamp": {
+                        "description": "显示发布时间",
+                        "type": "bool",
+                        "default": false
+                    },
+                    "show_video_size": {
+                        "description": "显示视频大小",
+                        "type": "bool",
+                        "default": false
+                    },
+                    "show_original_url": {
+                        "description": "显示原始链接",
+                        "type": "bool",
+                        "default": false
+                    },
+                    "max_desc_length": {
+                        "description": "简介最大长度",
+                        "type": "int",
+                        "hint": "0 = 不截断",
+                        "default": 0
+                    },
+                    "hide_redundant_twitter_title": {
+                        "description": "隐藏 Twitter/X 的冗余推文标题",
+                        "type": "bool",
+                        "default": true
+                    },
+                    "hide_duplicate_title_author": {
+                        "description": "标题和作者完全相同时隐藏标题",
                         "type": "bool",
                         "default": true
                     }
