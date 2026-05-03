@@ -270,7 +270,7 @@ class MessageSender:
                     await event.send(event.chain_result([node]))
                 elif isinstance(node, Image):
                     batch.append(node)
-                    if len(batch) >= self.DIRECT_IMAGE_BATCH_SIZE:
+                    if self.DIRECT_IMAGE_BATCH_SIZE > 0 and len(batch) >= self.DIRECT_IMAGE_BATCH_SIZE:
                         await event.send(event.chain_result(batch))
                         batch = []
                 else:
@@ -289,7 +289,9 @@ class MessageSender:
         nodes: List[Node],
     ) -> None:
         """按批发送合并转发节点，降低 QQ/NapCat 对大转发的解析压力。"""
-        chunk_size = max(1, self.FORWARD_CHUNK_SIZE)
+        chunk_size = self.FORWARD_CHUNK_SIZE if self.FORWARD_CHUNK_SIZE > 0 else len(nodes)
+        if chunk_size == 0:
+            chunk_size = 1
         for start in range(0, len(nodes), chunk_size):
             chunk = nodes[start:start + chunk_size]
             await event.send(event.chain_result([Nodes(chunk)]))
@@ -394,9 +396,12 @@ class MessageSender:
         sender_id: Any,
     ) -> list:
         chunks = []
-        for start in range(0, len(items), self.FORWARD_CHUNK_SIZE):
+        chunk_size = self.FORWARD_CHUNK_SIZE if self.FORWARD_CHUNK_SIZE > 0 else len(items)
+        if chunk_size == 0:
+            chunk_size = 1
+        for start in range(0, len(items), chunk_size):
             messages = []
-            for kind, value in items[start:start + self.FORWARD_CHUNK_SIZE]:
+            for kind, value in items[start:start + chunk_size]:
                 segment = self._build_onebot_segment(kind, value)
                 if not segment:
                     continue

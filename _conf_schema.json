@@ -155,13 +155,13 @@
             "forward_chunk_size": {
                 "description": "合并转发分批数量",
                 "type": "int",
-                "hint": "开启打包时，单个合并转发节点包含的最大媒体数量",
+                "hint": "开启打包时，单个合并转发节点包含的最大媒体数量；0 = 不限制数量",
                 "default": 8
             },
             "direct_image_batch_size": {
                 "description": "直接发图分批数量",
                 "type": "int",
-                "hint": "未开启打包时，或私聊等环境，每次连发图片的最大数量",
+                "hint": "未开启打包时，或私聊等环境，每次连发图片的最大数量；0 = 不限制数量",
                 "default": 4
             },
             "opening": {
