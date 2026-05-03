@@ -2,7 +2,7 @@
 from typing import Any, List, Optional
 
 from astrbot.api.event import AstrMessageEvent
-from astrbot.api.message_components import Nodes, Plain, Image, Node
+from astrbot.api.message_components import Nodes, Plain, Image, Node, Video
 
 from .node_builder import is_pure_image_gallery
 from ..logger import logger
@@ -96,6 +96,7 @@ class MessageSender:
                 link_nodes = meta.get('link_nodes', [])
                 metadata = meta.get('metadata', {}) or {}
                 image_index = 0
+                video_index = 0
                 for node in link_nodes:
                     if node is None:
                         continue
@@ -127,6 +128,25 @@ class MessageSender:
                             content=[forward_image],
                         ))
                         forward_items.append(("image", image_file))
+                    elif isinstance(node, Video):
+                        video_file = self._get_forward_video_file(
+                            metadata,
+                            video_index,
+                        )
+                        video_index += 1
+                        if not video_file:
+                            direct_nodes.append(node)
+                            continue
+                        forward_video = self._build_forward_video(video_file)
+                        if forward_video is None:
+                            direct_nodes.append(node)
+                            continue
+                        forward_nodes.append(Node(
+                            name=sender_name,
+                            uin=sender_id,
+                            content=[forward_video],
+                        ))
+                        forward_items.append(("video", video_file))
                     else:
                         direct_nodes.append(node)
                 if link_idx < len(normal_metadata) - 1:
@@ -299,6 +319,35 @@ class MessageSender:
             logger.warning(f"构建转发URL图片失败: {e}")
             return None
 
+    @staticmethod
+    def _get_forward_video_file(metadata: dict, video_index: int) -> str:
+        token_urls = metadata.get('file_token_urls') or []
+        if video_index < len(token_urls) and token_urls[video_index]:
+            return str(token_urls[video_index]).strip()
+
+        video_urls = metadata.get('video_urls') or []
+        if video_index < len(video_urls):
+            url_list = video_urls[video_index]
+            if isinstance(url_list, list) and url_list:
+                return str(url_list[0] or "").strip()
+        
+        file_paths = metadata.get('file_paths') or []
+        if video_index < len(file_paths) and file_paths[video_index]:
+            return str(file_paths[video_index]).strip()
+        
+        return ""
+
+    @staticmethod
+    def _build_forward_video(video_file: str) -> Optional[Video]:
+        try:
+            if video_file.startswith("http"):
+                return Video.fromURL(video_file)
+            else:
+                return Video.fromFileSystem(video_file)
+        except Exception as e:
+            logger.warning(f"构建转发视频节点失败: {e}")
+            return None
+
     async def _send_onebot_forward_items(
         self,
         event: AstrMessageEvent,
@@ -375,6 +424,11 @@ class MessageSender:
             if not file:
                 return None
             return {"type": "image", "data": {"file": file}}
+        if kind == "video":
+            file = str(value or "").strip()
+            if not file:
+                return None
+            return {"type": "video", "data": {"file": file}}
         return None
 
     @staticmethod

@@ -647,6 +647,9 @@ class VideoParserPlugin(Star):
                 )
 
             try:
+                self.message_sender.FORWARD_CHUNK_SIZE = cfg.message.forward_chunk_size
+                self.message_sender.DIRECT_IMAGE_BATCH_SIZE = cfg.message.direct_image_batch_size
+
                 if cfg.message.auto_pack:
                     await self.message_sender.send_packed_results(
                         event,
