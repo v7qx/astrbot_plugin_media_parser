@@ -13,7 +13,7 @@
                     "仅文本",
                     "仅富媒体"
                 ],
-                "default": "全部发送"
+                "default": "仅文本"
             },
             "douyin": {
                 "description": "抖音",
@@ -79,7 +79,7 @@
                     "仅文本",
                     "仅富媒体"
                 ],
-                "default": "全部发送"
+                "default": "关闭"
             },
             "toutiao": {
                 "description": "今日头条",
@@ -90,7 +90,7 @@
                     "仅文本",
                     "仅富媒体"
                 ],
-                "default": "全部发送"
+                "default": "关闭"
             },
             "xiaoheihe": {
                 "description": "小黑盒",
@@ -101,7 +101,7 @@
                     "仅文本",
                     "仅富媒体"
                 ],
-                "default": "全部发送"
+                "default": "关闭"
             },
             "twitter": {
                 "description": "Twitter/X",
@@ -123,7 +123,7 @@
             "auto_parse": {
                 "description": "自动解析链接",
                 "type": "bool",
-                "default": true
+                "default": false
             },
             "keywords": {
                 "description": "手动触发关键词",
@@ -150,19 +150,19 @@
                 "description": "打包为消息集合",
                 "type": "bool",
                 "hint": "媒体较多时建议启用；将会把图文视频按独立转发节点分批发送",
-                "default": false
+                "default": true
             },
             "forward_chunk_size": {
                 "description": "合并转发分批数量",
                 "type": "int",
                 "hint": "开启打包时，单个合并转发节点包含的最大媒体数量；0 = 不限制数量",
-                "default": 8
+                "default": 0
             },
             "direct_image_batch_size": {
                 "description": "直接发图分批数量",
                 "type": "int",
                 "hint": "未开启打包时，或私聊等环境，每次连发图片的最大数量；0 = 不限制数量",
-                "default": 4
+                "default": 0
             },
             "opening": {
                 "description": "开场语",
@@ -171,7 +171,7 @@
                     "enable": {
                         "description": "发送开场语",
                         "type": "bool",
-                        "default": true
+                        "default": false
                     },
                     "content": {
                         "description": "开场语内容",
@@ -216,7 +216,7 @@
                     "show_title": {
                         "description": "显示标题",
                         "type": "bool",
-                        "default": true
+                        "default": false
                     },
                     "show_author": {
                         "description": "显示作者",
@@ -247,7 +247,7 @@
                         "description": "简介最大长度",
                         "type": "int",
                         "hint": "0 = 不截断",
-                        "default": 0
+                        "default": 300
                     },
                     "hide_redundant_twitter_title": {
                         "description": "隐藏 Twitter/X 的冗余推文标题",
@@ -374,7 +374,7 @@
                 "description": "互斥等待时间",
                 "type": "float",
                 "hint": "检测到可解析链接后先等待指定秒数；等待期间若互斥机器人已响应，则取消本次解析",
-                "default": 2.0
+                "default": 3.0
             },
             "url_cooldown_seconds": {
                 "description": "同链接冷却时间",
