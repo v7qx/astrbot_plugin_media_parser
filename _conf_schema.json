@@ -266,6 +266,24 @@
                         "default": true
                     }
                 }
+            },
+            "smart_pack_desc_len": {
+                "description": "触发打包:简介长度(字)",
+                "type": "int",
+                "hint": "开启消息打包时，超过该字数触发打包；0=关闭此条件",
+                "default": 100
+            },
+            "smart_pack_image_count": {
+                "description": "触发打包:图片数量(张)",
+                "type": "int",
+                "hint": "开启消息打包时，超过该张数触发打包；0=关闭此条件",
+                "default": 4
+            },
+            "smart_pack_video_count": {
+                "description": "触发打包:视频数量(个)",
+                "type": "int",
+                "hint": "开启消息打包时，超过该个数触发打包；0=关闭此条件",
+                "default": 2
             }
         }
     },
@@ -286,15 +304,15 @@
                 "default": "/app/sharedFolder/video_parser/cache"
             },
             "max_video_size_mb": {
-                "description": "视频大小上限(MB)",
+                "description": "最大媒体下载限制(MB)",
                 "type": "float",
-                "hint": "普通视频先预检；DASH/M3U8 下载后按实际大小兜底；0 = 不限制",
+                "hint": "全局下载大小上限，普通文件先预检；0 = 不限制",
                 "default": 1000.0
             },
             "large_video_threshold_mb": {
-                "description": "大视频阈值(MB)",
+                "description": "大视频直发阈值(MB)",
                 "type": "float",
-                "hint": "超过阈值单独发送，不放入消息集合，上限100MB，0 = 不限制",
+                "hint": "超过该阈值将被强制移出合并转发独立发送，上限100MB，0 = 不限制",
                 "default": 100.0
             }
         }

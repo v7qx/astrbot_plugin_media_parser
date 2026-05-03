@@ -120,6 +120,9 @@ class MessageConfig:
     forward_chunk_size: int = 8
     direct_image_batch_size: int = 4
     video_pack_threshold: int = 0
+    smart_pack_desc_len: int = 100
+    smart_pack_image_count: int = 4
+    smart_pack_video_count: int = 2
     opening_enabled: bool = True
     opening_content: str = "流媒体解析bot为您服务 ٩( 'ω' )و"
     hot_comment_count: int = 0
@@ -347,6 +350,15 @@ class ConfigManager:
             direct_image_batch_size=message_raw.get("direct_image_batch_size", 4),
             video_pack_threshold=self._parse_non_negative_int(
                 message_raw.get("video_pack_threshold", 0), 0
+            ),
+            smart_pack_desc_len=self._parse_non_negative_int(
+                message_raw.get("smart_pack_desc_len", 100), 100
+            ),
+            smart_pack_image_count=self._parse_non_negative_int(
+                message_raw.get("smart_pack_image_count", 4), 4
+            ),
+            smart_pack_video_count=self._parse_non_negative_int(
+                message_raw.get("smart_pack_video_count", 2), 2
             ),
             opening_enabled=opening.get("enable", True),
             opening_content=opening.get(

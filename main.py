@@ -254,6 +254,41 @@ class VideoParserPlugin(Star):
         )
         return bool((rich_enabled and has_media) or (text_enabled and has_text))
 
+    def _should_pack_message(self, build_result, cfg) -> bool:
+        if not cfg.message.auto_pack:
+            return False
+
+        desc_len = cfg.message.smart_pack_desc_len
+        img_count = cfg.message.smart_pack_image_count
+        vid_count = cfg.message.smart_pack_video_count
+
+        if desc_len == 0 and img_count == 0 and vid_count == 0:
+            return True
+
+        actual_desc_len = 0
+        actual_img_count = 0
+        actual_vid_count = 0
+        
+        from astrbot.api.message_components import Image, Video, Plain
+        
+        for link_nodes in build_result.all_link_nodes:
+            for node in link_nodes:
+                if isinstance(node, Image):
+                    actual_img_count += 1
+                elif isinstance(node, Video):
+                    actual_vid_count += 1
+                elif isinstance(node, Plain):
+                    actual_desc_len += len(node.text)
+                
+        if desc_len > 0 and actual_desc_len >= desc_len:
+            return True
+        if img_count > 0 and actual_img_count >= img_count:
+            return True
+        if vid_count > 0 and actual_vid_count >= vid_count:
+            return True
+            
+        return False
+
     async def _handle_clean_cache(self, event: AstrMessageEvent):
         cache_dir = self.download_manager.cache_dir
         if not cache_dir:
@@ -651,7 +686,7 @@ class VideoParserPlugin(Star):
                 self.message_sender.DIRECT_IMAGE_BATCH_SIZE = cfg.message.direct_image_batch_size
                 self.message_sender.VIDEO_PACK_THRESHOLD = cfg.message.video_pack_threshold
 
-                if cfg.message.auto_pack:
+                if self._should_pack_message(build_result, cfg):
                     await self.message_sender.send_packed_results(
                         event,
                         build_result.link_metadata,
