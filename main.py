@@ -30,7 +30,7 @@ from .core.output_policy import apply_override, parse_output_override
     "mod_astrbot_plugin_media_parser",
     "drdon1234",
     "聚合解析流媒体平台链接，转换为媒体直链发送",
-    "6.1.3-personal"
+    "6.1.4-personal"
 )
 class VideoParserPlugin(Star):
 
