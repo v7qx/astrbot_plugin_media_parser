@@ -27,16 +27,16 @@ class MessageSender:
     FORWARD_CHUNK_SIZE = 8
     DIRECT_IMAGE_BATCH_SIZE = 4
 
-    def get_sender_info(self, event: AstrMessageEvent) -> tuple:
+    def get_sender_info(self, event: AstrMessageEvent, sender_name: str = "视频解析bot") -> tuple:
         """获取发送者信息
 
         Args:
             event: 消息事件对象
+            sender_name: 合并转发中显示的发送者名称
 
         Returns:
             包含发送者名称和ID的元组 (sender_name, sender_id)
         """
-        sender_name = "视频解析bot"
         platform = event.get_platform_name()
         sender_id = event.get_self_id()
         if platform not in ("wechatpadpro", "webchat", "gewechat"):

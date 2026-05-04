@@ -75,6 +75,19 @@ def av2bv(av: int) -> str:
 class BilibiliParser(BaseVideoParser):
 
     """B 站解析器，支持视频/动态解析与热评提取。"""
+
+    def _build_author(self, name: str, mid) -> str:
+        """根据 show_uid 配置构建作者字符串。"""
+        name = str(name or "").strip()
+        mid = str(mid or "").strip()
+        if name and mid and self.show_uid:
+            return f"{name}(uid:{mid})"
+        if name:
+            return name
+        if mid and self.show_uid:
+            return f"(uid:{mid})"
+        return ""
+
     def __init__(
         self,
         cookie_runtime_enabled: bool = False,
@@ -86,12 +99,14 @@ class BilibiliParser(BaseVideoParser):
         local_debug_mode: bool = False,
         max_quality: int = 0,
         hot_comment_count: int = 0,
-        video_output_mode: str = "video"
+        video_output_mode: str = "video",
+        show_uid: bool = True,
     ):
         """初始化B站解析器"""
         super().__init__("bilibili")
         self.semaphore = asyncio.Semaphore(Config.PARSER_MAX_CONCURRENT)
         self.cookie_runtime_enabled = bool(cookie_runtime_enabled)
+        self.show_uid = bool(show_uid)
         self.video_output_mode = video_output_mode
         if self.video_output_mode not in ("video", "cover", "metadata"):
             self.video_output_mode = "video"
@@ -903,14 +918,7 @@ class BilibiliParser(BaseVideoParser):
         owner = data.get("owner") or {}
         name = owner.get("name") or ""
         mid = owner.get("mid")
-        if name and mid:
-            author = f"{name}(uid:{mid})"
-        elif name:
-            author = name
-        elif mid:
-            author = f"(uid:{mid})"
-        else:
-            author = ""
+        author = self._build_author(name, mid)
         
         timestamp = ""
         pubdate = data.get("pubdate")
@@ -999,13 +1007,8 @@ class BilibiliParser(BaseVideoParser):
             pub = result.get("publisher") or {}
             name = pub.get("name") or ""
             mid = pub.get("mid") or mid
-        if name and mid:
-            author = f"{name}(uid:{mid})"
-        elif name:
-            author = name
-        elif mid:
-            author = f"(uid:{mid})"
-        else:
+        author = self._build_author(name, mid)
+        if not author:
             author = result.get("season_title") or result.get("title") or ""
         
         timestamp = ""
@@ -1779,14 +1782,7 @@ class BilibiliParser(BaseVideoParser):
                     mid = user_info.get("uid")
                     name = user_info.get("uname", "")
 
-        if name and mid:
-            author = f"{name}(uid:{mid})"
-        elif name:
-            author = name
-        elif mid:
-            author = f"(uid:{mid})"
-        else:
-            author = ""
+        author = self._build_author(name, mid)
 
         timestamp = ""
         if isinstance(desc_obj, dict):
@@ -2062,6 +2058,7 @@ class BilibiliParser(BaseVideoParser):
             try:
                 result = await self.parse_bilibili_minimal(url, session=session)
                 if result:
+                    result["show_uid"] = self.show_uid
                     logger.debug(
                         f"[{self.name}] parse: 解析成功 {url}, "
                         f"title={result.get('title', '')[:50]}, "

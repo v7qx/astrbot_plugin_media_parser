@@ -497,7 +497,8 @@ async def main(
             max_quality=0,
             admin_assist_enabled=False,
             credential_path=bilibili_cookie_runtime_file,
-            local_debug_mode=cache_dir_available
+            local_debug_mode=cache_dir_available,
+            show_uid=True,
         ),
         DouyinParser(),
         TikTokParser(

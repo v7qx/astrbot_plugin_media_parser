@@ -117,6 +117,7 @@ class TriggerConfig:
 @dataclass
 class MessageConfig:
     auto_pack: bool = False
+    forward_sender_name: str = "视频解析bot"
     forward_chunk_size: int = 8
     direct_image_batch_size: int = 4
     video_pack_threshold: int = 0
@@ -262,6 +263,7 @@ class BilibiliEnhancedConfig:
     admin_request_cooldown_minutes: int = 1440
     skip_qq_card_parse: bool = True
     video_output_mode: str = "video"
+    show_uid: bool = True
 
 
 @dataclass
@@ -348,6 +350,10 @@ class ConfigManager:
 
         self.message = MessageConfig(
             auto_pack=message_raw.get("auto_pack", False),
+            forward_sender_name=str(
+                message_raw.get("forward_sender_name", "视频解析bot")
+                or "视频解析bot"
+            ).strip(),
             forward_chunk_size=message_raw.get("forward_chunk_size", 8),
             direct_image_batch_size=message_raw.get("direct_image_batch_size", 4),
             video_pack_threshold=self._parse_non_negative_int(
@@ -582,6 +588,7 @@ class ConfigManager:
             admin_reply_timeout_minutes=admin_reply_timeout,
             admin_request_cooldown_minutes=admin_request_cooldown,
             skip_qq_card_parse=bool(bili.get("skip_qq_card_parse", True)),
+            show_uid=bool(bili.get("show_uid", True)),
             video_output_mode=self._parse_bilibili_video_output_mode(
                 bili.get("video_output_mode", "视频")
             ),
@@ -666,6 +673,7 @@ class ConfigManager:
                 credential_path=self.bilibili.cookie_runtime_file,
                 hot_comment_count=bili_hc,
                 video_output_mode=self.bilibili.video_output_mode,
+                show_uid=self.bilibili.show_uid,
             )
             parsers.append(self.bilibili_parser)
         if self._enable_douyin:

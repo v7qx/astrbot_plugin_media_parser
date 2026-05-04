@@ -491,7 +491,9 @@ class VideoParserPlugin(Star):
                 f"output_override={output_override.mode}"
             )
 
-        sender_name, sender_id = self.message_sender.get_sender_info(event)
+        sender_name, sender_id = self.message_sender.get_sender_info(
+            event, sender_name=cfg.message.forward_sender_name,
+        )
 
         timeout = aiohttp.ClientTimeout(total=Config.DEFAULT_TIMEOUT)
         async with aiohttp.ClientSession(timeout=timeout) as session:

@@ -152,6 +152,12 @@
                 "hint": "媒体较多时建议启用；将会把图文视频按独立转发节点分批发送",
                 "default": true
             },
+            "forward_sender_name": {
+                "description": "合并转发发送者名称",
+                "type": "string",
+                "hint": "合并转发消息中显示的发送者昵称",
+                "default": "视频解析bot"
+            },
             "forward_chunk_size": {
                 "description": "合并转发分批数量",
                 "type": "int",
@@ -444,6 +450,12 @@
                 ],
                 "hint": "实际画质取决于账号权限和视频源",
                 "default": "不限制"
+            },
+            "show_uid": {
+                "description": "显示UP主UID",
+                "type": "bool",
+                "hint": "关闭后作者仅显示昵称，不附带uid编号",
+                "default": true
             },
             "skip_qq_card_parse": {
                 "description": "跳过B站QQ卡片解析",

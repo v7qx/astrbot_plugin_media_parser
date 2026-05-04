@@ -160,7 +160,8 @@ def build_text_node(
                 likes = 0
             time_text = str(item.get("time", "") or "").strip() or "-"
             message = str(item.get("message", "") or "").strip() or "（无文本内容）"
-            user_label = f"{username}(uid:{uid})" if uid else username
+            show_uid = metadata.get("show_uid", True)
+            user_label = f"{username}(uid:{uid})" if uid and show_uid else username
             text_parts.append(f"[{idx}] {user_label}")
             text_parts.append(f"点赞: {likes} | 时间: {time_text}")
             text_parts.append(message)
