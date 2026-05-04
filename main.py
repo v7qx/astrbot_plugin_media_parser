@@ -10,7 +10,7 @@ from astrbot.api.star import Context, Star, register
 from astrbot.core.star.filter.event_message_type import EventMessageType
 
 from .core.parser import ParserManager
-from .core.parser.utils import extract_url_from_card_data
+from .core.parser.utils import extract_url_from_card_data, is_bilibili_url
 from .core.downloader import DownloadManager
 from .core.storage import (
     cleanup_files,
@@ -399,6 +399,15 @@ class VideoParserPlugin(Star):
 
         card_url = self._extract_url_from_json_card(event)
         if card_url:
+            if (
+                cfg.bilibili.skip_qq_card_parse
+                and is_bilibili_url(card_url)
+            ):
+                if cfg.admin.debug_mode:
+                    self.logger.debug(
+                        f"[media_parser] 跳过B站QQ卡片解析: {card_url}"
+                    )
+                return
             if cfg.admin.debug_mode:
                 self.logger.debug(
                     f"[media_parser] 从JSON卡片提取到链接: {card_url}"

@@ -85,12 +85,16 @@ class BilibiliParser(BaseVideoParser):
         credential_path: str = "",
         local_debug_mode: bool = False,
         max_quality: int = 0,
-        hot_comment_count: int = 0
+        hot_comment_count: int = 0,
+        video_output_mode: str = "video"
     ):
         """初始化B站解析器"""
         super().__init__("bilibili")
         self.semaphore = asyncio.Semaphore(Config.PARSER_MAX_CONCURRENT)
         self.cookie_runtime_enabled = bool(cookie_runtime_enabled)
+        self.video_output_mode = video_output_mode
+        if self.video_output_mode not in ("video", "cover", "metadata"):
+            self.video_output_mode = "video"
         try:
             self.max_qn = max(0, int(max_quality))
         except (TypeError, ValueError):
@@ -920,12 +924,18 @@ class BilibiliParser(BaseVideoParser):
             aid_value = int(aid_value) if aid_value is not None else None
         except (TypeError, ValueError):
             aid_value = None
+        pic = str(data.get("pic") or "").strip()
+        if pic.startswith("//"):
+            pic = "https:" + pic
+        elif pic.startswith("http://"):
+            pic = "https://" + pic[len("http://"):]
         return {
             "title": title,
             "desc": desc,
             "author": author,
             "timestamp": timestamp,
             "aid": aid_value,
+            "pic": pic,
             "content_access_type_hint": (
                 "charge_exclusive" if data.get("is_upower_exclusive")
                 else "paid_exclusive" if any(
@@ -1015,12 +1025,23 @@ class BilibiliParser(BaseVideoParser):
         except (TypeError, ValueError):
             aid_value = None
 
+        pic = ""
+        if isinstance(ep_obj, dict):
+            pic = str(ep_obj.get("cover") or "").strip()
+        if not pic:
+            pic = str(result.get("cover") or "").strip()
+        if pic.startswith("//"):
+            pic = "https:" + pic
+        elif pic.startswith("http://"):
+            pic = "https://" + pic[len("http://"):]
+
         return {
             "title": title,
             "desc": desc,
             "author": author,
             "timestamp": timestamp,
             "aid": aid_value,
+            "pic": pic,
         }
 
     async def get_first_ep_id_by_season(
@@ -2163,6 +2184,73 @@ class BilibiliParser(BaseVideoParser):
             if p_index > len(pages):
                 raise RuntimeError(f"分P序号超出范围: {p_index}")
             cid = pages[p_index - 1]["cid"]
+
+            # ── video_output_mode 提前返回 ──────────────────
+            if self.video_output_mode != "video":
+                referer = page_url
+                origin = "https://www.bilibili.com"
+                image_headers, video_headers = self._build_media_headers(
+                    referer=referer,
+                    origin=origin,
+                    cookie_header=cookie_header
+                )
+                is_b23_short = urlparse(original_url).netloc.lower() == B23_HOST
+                display_url = original_url if is_b23_short else page_url
+                cover_url = str(info.get("pic") or "").strip()
+
+                if self.video_output_mode == "metadata":
+                    logger.debug(f"[{self.name}] video_output_mode=metadata，跳过视频/封面")
+                    result = {
+                        "url": display_url,
+                        "title": info.get("title", ""),
+                        "author": info.get("author", ""),
+                        "desc": info.get("desc", ""),
+                        "timestamp": info.get("timestamp", ""),
+                        "video_urls": [],
+                        "image_urls": [],
+                        "image_headers": image_headers,
+                        "video_headers": video_headers,
+                    }
+                    if enable_hot_comments:
+                        await self._attach_hot_comments_to_result(
+                            session=session,
+                            result=result,
+                            oid=comment_oid,
+                            comment_type=comment_type,
+                            referer=page_url,
+                            cookie_header=cookie_header
+                        )
+                    return result
+
+                if self.video_output_mode == "cover":
+                    logger.debug(f"[{self.name}] video_output_mode=cover，返回封面")
+                    result = {
+                        "url": display_url,
+                        "title": info.get("title", ""),
+                        "author": info.get("author", ""),
+                        "desc": info.get("desc", ""),
+                        "timestamp": info.get("timestamp", ""),
+                        "video_urls": [],
+                        "image_urls": [[cover_url]] if cover_url else [],
+                        "image_headers": image_headers,
+                        "video_headers": video_headers,
+                    }
+                    if not cover_url:
+                        result.setdefault("image_skip_reasons", []).append(
+                            "B站接口未返回封面 pic"
+                        )
+                    if enable_hot_comments:
+                        await self._attach_hot_comments_to_result(
+                            session=session,
+                            result=result,
+                            oid=comment_oid,
+                            comment_type=comment_type,
+                            referer=page_url,
+                            cookie_header=cookie_header
+                        )
+                    return result
+            # ── video_output_mode 提前返回结束 ──────────────
+
             access_info = await self._analyze_target_access(
                 vtype="ugc",
                 referer=page_url,
@@ -2209,6 +2297,73 @@ class BilibiliParser(BaseVideoParser):
                 comment_oid = int(comment_oid_raw) if comment_oid_raw is not None else None
             except (TypeError, ValueError):
                 comment_oid = None
+
+            # ── video_output_mode 提前返回（PGC）──────────
+            if self.video_output_mode != "video":
+                referer = page_url
+                origin = "https://www.bilibili.com"
+                image_headers, video_headers = self._build_media_headers(
+                    referer=referer,
+                    origin=origin,
+                    cookie_header=cookie_header
+                )
+                is_b23_short = urlparse(original_url).netloc.lower() == B23_HOST
+                display_url = original_url if is_b23_short else page_url
+                cover_url = str(info.get("pic") or "").strip()
+
+                if self.video_output_mode == "metadata":
+                    logger.debug(f"[{self.name}] video_output_mode=metadata(PGC)，跳过视频/封面")
+                    result = {
+                        "url": display_url,
+                        "title": info.get("title", ""),
+                        "author": info.get("author", ""),
+                        "desc": info.get("desc", ""),
+                        "timestamp": info.get("timestamp", ""),
+                        "video_urls": [],
+                        "image_urls": [],
+                        "image_headers": image_headers,
+                        "video_headers": video_headers,
+                    }
+                    if enable_hot_comments:
+                        await self._attach_hot_comments_to_result(
+                            session=session,
+                            result=result,
+                            oid=comment_oid,
+                            comment_type=comment_type,
+                            referer=page_url,
+                            cookie_header=cookie_header
+                        )
+                    return result
+
+                if self.video_output_mode == "cover":
+                    logger.debug(f"[{self.name}] video_output_mode=cover(PGC)，返回封面")
+                    result = {
+                        "url": display_url,
+                        "title": info.get("title", ""),
+                        "author": info.get("author", ""),
+                        "desc": info.get("desc", ""),
+                        "timestamp": info.get("timestamp", ""),
+                        "video_urls": [],
+                        "image_urls": [[cover_url]] if cover_url else [],
+                        "image_headers": image_headers,
+                        "video_headers": video_headers,
+                    }
+                    if not cover_url:
+                        result.setdefault("image_skip_reasons", []).append(
+                            "B站接口未返回封面 pic"
+                        )
+                    if enable_hot_comments:
+                        await self._attach_hot_comments_to_result(
+                            session=session,
+                            result=result,
+                            oid=comment_oid,
+                            comment_type=comment_type,
+                            referer=page_url,
+                            cookie_header=cookie_header
+                        )
+                    return result
+            # ── video_output_mode 提前返回结束（PGC）──────
+
             access_info = await self._analyze_target_access(
                 vtype="pgc",
                 referer=page_url,

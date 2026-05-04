@@ -8,6 +8,18 @@ from .node_builder import is_pure_image_gallery
 from ..logger import logger
 
 
+def _split_plain_image_video(nodes):
+    """将节点列表按类型拆分为 Plain / Image / Video / 其他。"""
+    texts = [n for n in nodes if isinstance(n, Plain)]
+    images = [n for n in nodes if isinstance(n, Image)]
+    videos = [n for n in nodes if isinstance(n, Video)]
+    others = [
+        n for n in nodes
+        if not isinstance(n, (Plain, Image, Video))
+    ]
+    return texts, images, videos, others
+
+
 class MessageSender:
 
     """消息发送器，封装统一的私聊/群聊发送接口。"""
@@ -242,18 +254,22 @@ class MessageSender:
         separator = "-------------------------------------"
         for link_idx, link_nodes in enumerate(all_link_nodes):
             if is_pure_image_gallery(link_nodes):
-                texts = [
-                    node for node in link_nodes
-                    if isinstance(node, Plain)
-                ]
-                images = [
-                    node for node in link_nodes
-                    if isinstance(node, Image)
-                ]
-                for text in texts:
-                    await event.send(event.chain_result([text]))
-                if images:
-                    await event.send(event.chain_result(images))
+                texts, images, videos, others = _split_plain_image_video(link_nodes)
+                if len(texts) == 1 and len(images) == 1 and not videos and not others:
+                    try:
+                        await event.send(event.chain_result([texts[0], images[0]]))
+                        logger.debug("检测到 Plain + 单 Image，已合并为单条消息发送")
+                    except Exception as e:
+                        logger.warning(
+                            f"合并发送 Plain + Image 失败，回退分开发送: {e}"
+                        )
+                        await event.send(event.chain_result([texts[0]]))
+                        await event.send(event.chain_result(images))
+                else:
+                    for text in texts:
+                        await event.send(event.chain_result([text]))
+                    if images:
+                        await event.send(event.chain_result(images))
             else:
                 for node in link_nodes:
                     if node is not None:

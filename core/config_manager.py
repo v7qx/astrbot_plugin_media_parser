@@ -260,6 +260,8 @@ class BilibiliEnhancedConfig:
     enable_admin_assist: bool = False
     admin_reply_timeout_minutes: int = 1440
     admin_request_cooldown_minutes: int = 1440
+    skip_qq_card_parse: bool = True
+    video_output_mode: str = "video"
 
 
 @dataclass
@@ -579,6 +581,10 @@ class ConfigManager:
             enable_admin_assist=enable_admin_assist,
             admin_reply_timeout_minutes=admin_reply_timeout,
             admin_request_cooldown_minutes=admin_request_cooldown,
+            skip_qq_card_parse=bool(bili.get("skip_qq_card_parse", True)),
+            video_output_mode=self._parse_bilibili_video_output_mode(
+                bili.get("video_output_mode", "视频")
+            ),
         )
 
         # --- proxy ---
@@ -659,6 +665,7 @@ class ConfigManager:
                 admin_request_cooldown_minutes=self.bilibili.admin_request_cooldown_minutes,
                 credential_path=self.bilibili.cookie_runtime_file,
                 hot_comment_count=bili_hc,
+                video_output_mode=self.bilibili.video_output_mode,
             )
             parsers.append(self.bilibili_parser)
         if self._enable_douyin:
@@ -758,3 +765,20 @@ class ConfigManager:
             seen.add(value_str)
             normalized.append(value_str)
         return normalized
+
+    @staticmethod
+    def _parse_bilibili_video_output_mode(raw_value) -> str:
+        """将用户可读的配置值映射为内部 video_output_mode 字符串。"""
+        _LABEL_MAP = {
+            "视频": "video",
+            "仅封面": "cover",
+            "仅文本": "metadata",
+            "video": "video",
+            "cover": "cover",
+            "metadata": "metadata",
+        }
+        key = str(raw_value or "视频").strip()
+        mode = _LABEL_MAP.get(key, "")
+        if mode not in ("video", "cover", "metadata"):
+            mode = "video"
+        return mode

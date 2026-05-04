@@ -445,6 +445,23 @@
                 "hint": "实际画质取决于账号权限和视频源",
                 "default": "不限制"
             },
+            "skip_qq_card_parse": {
+                "description": "跳过B站QQ卡片解析",
+                "type": "bool",
+                "hint": "开启后，从QQ应用卡片提取到的B站链接将被跳过，不自动解析回复；普通文本URL不受影响",
+                "default": true
+            },
+            "video_output_mode": {
+                "description": "B站视频输出模式",
+                "type": "string",
+                "options": [
+                    "视频",
+                    "仅封面",
+                    "仅文本"
+                ],
+                "hint": "视频=返回视频文件；仅封面=只返回B站API封面图；仅文本=只返回标题作者简介等文本",
+                "default": "视频"
+            },
             "admin_assist": {
                 "description": "管理员协助登录",
                 "type": "object",

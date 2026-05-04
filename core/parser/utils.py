@@ -87,6 +87,22 @@ def is_live_url(url: str) -> bool:
         return False
 
 
+def is_bilibili_url(url: str) -> bool:
+    """判断 URL 是否为 B 站域名（bilibili.com / b23.tv）。"""
+    if not url:
+        return False
+    try:
+        parsed = urlparse(_ensure_url_has_scheme(url))
+        host = (parsed.hostname or "").lower().strip(".")
+        return (
+            host == "b23.tv"
+            or host.endswith(".bilibili.com")
+            or host == "bilibili.com"
+        )
+    except Exception:
+        return False
+
+
 def extract_url_from_card_data(msg_data) -> Optional[str]:
     """从单个消息段的 data 字段中提取 QQ 结构化卡片 URL。"""
     try:
